@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Asphalt Field Calculator</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1b1b1d">
+
+<!-- iOS home screen support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AsphaltCalc">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --asphalt: #1b1b1d;
+    --asphalt-2: #232326;
+    --concrete: #3a3a3d;
+    --line-paint: #f0ede4;
+    --safety-orange: #ff6a1a;
+    --caution-yellow: #ffc72c;
+    --ok-green: #5fae4a;
+    --muted: #9a978f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--asphalt);
+    background-image:
+      radial-gradient(ellipse at 20% -10%, rgba(255,106,26,0.07), transparent 45%),
+      repeating-linear-gradient(115deg, rgba(255,255,255,0.012) 0 2px, transparent 2px 5px);
+    color: var(--line-paint);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    padding: 28px 16px 60px;
+  }
+  .wrap{max-width: 720px; margin: 0 auto;}
+
+  /* Header */
+  header{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    border-bottom: 3px solid var(--caution-yellow);
+    padding-bottom: 14px; margin-bottom: 22px;
+    position: relative;
+  }
+  header::before{
+    content:"";
+    position:absolute; left:0; right:0; bottom:-8px; height:5px;
+    background: repeating-linear-gradient(135deg, var(--caution-yellow) 0 14px, var(--asphalt) 14px 28px);
+    opacity:0.9;
+  }
+  h1{
+    font-family:'Oswald', sans-serif;
+    font-weight:700;
+    font-size: 28px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin:0;
+    color: var(--line-paint);
+  }
+  h1 span{color: var(--safety-orange);}
+  .subtitle{
+    font-size:12px; color: var(--muted); margin-top:4px; letter-spacing:0.04em;
+  }
+  .badge{
+    font-family:'Oswald',sans-serif; font-size:12px; letter-spacing:0.08em;
+    color: var(--asphalt); background: var(--caution-yellow);
+    padding: 5px 10px; border-radius: 2px; font-weight:600; white-space:nowrap;
+  }
+
+  /* Config strip */
+  .config{
+    display:grid; grid-template-columns: 1fr 1fr; gap:12px;
+    background: var(--asphalt-2);
+    border: 1px solid var(--concrete);
+    border-left: 4px solid var(--safety-orange);
+    padding: 14px 16px; border-radius: 3px; margin-bottom: 22px;
+  }
+  .field label{
+    display:block; font-family:'Oswald',sans-serif; font-size:11px;
+    text-transform:uppercase; letter-spacing:0.08em; color: var(--muted); margin-bottom:5px;
+  }
+  .field input{
+    width:100%; background: var(--asphalt); border:1px solid var(--concrete);
+    color: var(--line-paint); font-family:'IBM Plex Mono',monospace; font-size:15px;
+    padding: 8px 10px; border-radius:2px;
+  }
+  .field input:focus{ outline:none; border-color: var(--safety-orange); }
+  .field .hint{ font-size:10px; color: var(--muted); margin-top:4px; }
+
+  /* Tabs styled as station markers */
+  .stations{
+    display:flex; overflow-x:auto; gap:2px; margin-bottom:20px;
+    border-bottom: 1px solid var(--concrete);
+  }
+  .stations::-webkit-scrollbar{height:5px;}
+  .stations::-webkit-scrollbar-thumb{background:var(--concrete);}
+  .stop{
+    flex: 0 0 auto;
+    font-family:'Oswald',sans-serif; font-size:12px; text-transform:uppercase;
+    letter-spacing:0.05em; color: var(--muted);
+    background: transparent; border:none; cursor:pointer;
+    padding: 10px 14px; position:relative; white-space:nowrap;
+  }
+  .stop .num{ color: var(--safety-orange); font-family:'IBM Plex Mono',monospace; font-size:10px; margin-right:6px;}
+  .stop.active{ color: var(--line-paint); }
+  .stop.active::after{
+    content:""; position:absolute; left:8px; right:8px; bottom:-1px; height:3px;
+    background: var(--caution-yellow);
+  }
+
+  /* Panel */
+  .panel{
+    background: var(--asphalt-2);
+    border: 1px solid var(--concrete);
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .panel h2{
+    font-family:'Oswald',sans-serif; font-size:16px; text-transform:uppercase;
+    letter-spacing:0.04em; margin: 0 0 4px;
+  }
+  .panel .desc{ font-size:12px; color: var(--muted); margin-bottom:16px; }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;}
+  .field.full{ grid-column: 1 / -1; }
+
+  .result{
+    margin-top: 18px;
+    background: var(--asphalt);
+    border: 1px dashed var(--concrete);
+    border-radius: 3px;
+    padding: 16px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  .result .label{
+    font-family:'Oswald',sans-serif; font-size:11px; text-transform:uppercase;
+    letter-spacing:0.08em; color: var(--muted);
+  }
+  .result .value{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:30px; color: var(--ok-green);
+    line-height:1.1;
+  }
+  .result .value .unit{ font-size:14px; color: var(--muted); margin-left:6px; }
+  .result .station{ font-size:13px; color: var(--caution-yellow); margin-top:2px;}
+
+  /* Cross-section signature element */
+  .xsec{ margin-top:16px; }
+  .xsec-label{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; font-family:'Oswald',sans-serif;}
+  svg{ display:block; width:100%; height:auto; }
+
+  footer{
+    text-align:center; font-size:11px; color: var(--muted); margin-top: 30px;
+    letter-spacing:0.03em;
+  }
+  footer a{ color: var(--safety-orange); }
+
+  @media (max-width:480px){
+    .config, .grid2{ grid-template-columns:1fr; }
+    h1{ font-size:22px; }
+    .result .value{ font-size:24px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Asphalt<span>//</span>Calc</h1>
+      <div class="subtitle">Field tonnage &amp; station tool</div>
+    </div>
+    <div class="badge">2&Prime; Working Depth</div>
+  </header>
+
+  <div class="config">
+    <div class="field">
+      <label for="density">Density (lb/ft&sup3;)</label>
+      <input type="number" id="density" value="145" step="0.1">
+      <div class="hint">Use project mix design unit weight when known</div>
+    </div>
+    <div class="field">
+      <label for="truckTons">Truck Load (tons)</label>
+      <input type="number" id="truckTons" value="40" step="0.5">
+      <div class="hint">Enter actual scaled/certified load if available</div>
+    </div>
+  </div>
+
+  <div class="stations" id="tabs">
+    <button class="stop active" data-tab="tonnage"><span class="num">01</span>Tonnage</button>
+    <button class="stop" data-tab="truck"><span class="num">02</span>Truck Coverage</button>
+    <button class="stop" data-tab="stationtons"><span class="num">03</span>Station&rarr;Tons</button>
+    <button class="stop" data-tab="tonsstation"><span class="num">04</span>Tons&rarr;Station</button>
+    <button class="stop" data-tab="width"><span class="num">05</span>Find Width</button>
+    <button class="stop" data-tab="depth"><span class="num">06</span>Find Depth</button>
+    <button class="stop" data-tab="convert"><span class="num">07</span>Station Convert</button>
+  </div>
+
+  <!-- 01 TONNAGE -->
+  <div class="panel tab-panel" id="panel-tonnage">
+    <h2>Master Tonnage</h2>
+    <div class="desc">Tons = (L &times; W &times; D &times; density) &divide; 24,000</div>
+    <div class="grid2">
+      <div class="field"><label>Length (ft)</label><input type="number" id="t_L" value="500"></div>
+      <div class="field"><label>Width (ft)</label><input type="number" id="t_W" value="12"></div>
+      <div class="field full"><label>Depth (in)</label><input type="number" id="t_D" value="2" step="0.25"></div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="label">Tons required</div>
+        <div class="value" id="t_out">&mdash;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 TRUCK COVERAGE -->
+  <div class="panel tab-panel" id="panel-truck" style="display:none;">
+    <h2>Truck Coverage</h2>
+    <div class="desc">LF = (Truck tons &times; 24,000) &divide; (W &times; D &times; density)</div>
+    <div class="grid2">
+      <div class="field"><label>Width (ft)</label><input type="number" id="tc_W" value="12"></div>
+      <div class="field"><label>Depth (in)</label><input type="number" id="tc_D" value="2" step="0.25"></div>
+      <div class="field full"><label>Starting Station (optional, e.g. 300+00)</label><input type="text" id="tc_start" placeholder="300+00"></div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="label">One truck load covers</div>
+        <div class="value" id="tc_out">&mdash;</div>
+        <div class="station" id="tc_station"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 03 STATION -> TONS -->
+  <div class="panel tab-panel" id="panel-stationtons" style="display:none;">
+    <h2>Station Range &rarr; Tons</h2>
+    <div class="desc">LF = End &minus; Start, then Tons = (LF &times; W &times; D &times; density) &divide; 24,000</div>
+    <div class="grid2">
+      <div class="field"><label>Starting Station</label><input type="text" id="st_start" placeholder="122+50"></div>
+      <div class="field"><label>Ending Station</label><input type="text" id="st_end" placeholder="164+00"></div>
+      <div class="field"><label>Width (ft)</label><input type="number" id="st_W" value="12"></div>
+      <div class="field"><label>Depth (in)</label><input type="number" id="st_D" value="2" step="0.25"></div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="label">Linear feet / Tons needed</div>
+        <div class="value" id="st_out">&mdash;</div>
+        <div class="station" id="st_lf"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 TONS -> STATION -->
+  <div class="panel tab-panel" id="panel-tonsstation" style="display:none;">
+    <h2>Known Tonnage &rarr; Station Range</h2>
+    <div class="desc">LF = (Tons &times; 24,000) &divide; (W &times; D &times; density), applied from a start station</div>
+    <div class="grid2">
+      <div class="field"><label>Tons Available</label><input type="number" id="ts_tons" value="40"></div>
+      <div class="field"><label>Width (ft)</label><input type="number" id="ts_W" value="12"></div>
+      <div class="field"><label>Depth (in)</label><input type="number" id="ts_D" value="2" step="0.25"></div>
+      <div class="field"><label>Starting Station</label><input type="text" id="ts_start" placeholder="300+00"></div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="label">Coverage / Ending station</div>
+        <div class="value" id="ts_out">&mdash;</div>
+        <div class="station" id="ts_station"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 05 FIND WIDTH -->
+  <div class="panel tab-panel" id="panel-width" style="display:none;">
+    <h2>Find Width</h2>
+    <div class="desc">W = (Tons &times; 24,000) &divide; (L &times; D &times; density)</div>
+    <div class="grid2">
+      <div class="field"><label>Tons</label><input type="number" id="w_tons" value="602"></div>
+      <div class="field"><label>Length (ft)</label><input type="number" id="w_L" value="4150"></div>
+      <div class="field full"><label>Depth (in)</label><input type="number" id="w_D" value="2" step="0.25"></div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="label">Width</div>
+        <div class="value" id="w_out">&mdash;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 06 FIND DEPTH -->
+  <div class="panel tab-panel" id="panel-depth" style="display:none;">
+    <h2>Find Depth</h2>
+    <div class="desc">D = (Tons &times; 24,000) &divide; (L &times; W &times; density) &nbsp;&mdash;&nbsp; result in inches</div>
+    <div class="grid2">
+      <div class="field"><label>Tons</label><input type="number" id="d_tons" value="40"></div>
+      <div class="field"><label>Length (ft)</label><input type="number" id="d_L" value="276"></div>
+      <div class="field full"><label>Width (ft)</label><input type="number" id="d_W" value="12"></div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="label">Depth</div>
+        <div class="value" id="d_out">&mdash;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 07 STATION CONVERT -->
+  <div class="panel tab-panel" id="panel-convert" style="display:none;">
+    <h2>Station &harr; Linear Feet</h2>
+    <div class="desc">1 station = 100 LF. Convert either direction.</div>
+    <div class="grid2">
+      <div class="field"><label>Station (e.g. 25+50)</label><input type="text" id="cv_station" placeholder="25+50"></div>
+      <div class="field"><label>&mdash; or &mdash; Linear Feet</label><input type="number" id="cv_lf" placeholder="2550"></div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="label">Converted value</div>
+        <div class="value" id="cv_out">&mdash;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cross-section signature -->
+  <div class="panel">
+    <div class="xsec-label">Live pavement cross-section (mat width &times; depth, to scale)</div>
+    <div class="xsec">
+      <svg id="xsecSvg" viewBox="0 0 640 140" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+
+  <footer>
+    Assumptions: 145 lb/ft&sup3; density &amp; 40-ton truck load unless overridden above.<br>
+    For payment quantities, always follow the project&rsquo;s contract/spec measurement requirements.
+  </footer>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+
+  function parseStation(str){
+    if(!str) return null;
+    str = str.trim();
+    const m = str.match(/^(\d+)\+(\d{1,2}(?:\.\d+)?)$/);
+    if(m){ return parseInt(m[1],10)*100 + parseFloat(m[2]); }
+    const n = parseFloat(str);
+    return isNaN(n) ? null : n;
+  }
+  function toStation(lf){
+    if(lf < 0){
+      return "-" + toStation(-lf);
+    }
+    const whole = Math.floor(lf/100);
+    const rem = lf - whole*100;
+    return whole + "+" + rem.toFixed(2).padStart(5,'0');
+  }
+  function fmt(n, decimals){
+    if(!isFinite(n)) return "&mdash;";
+    return n.toLocaleString(undefined, {minimumFractionDigits:decimals, maximumFractionDigits:decimals});
+  }
+
+  function density(){ return parseFloat($('density').value) || 145; }
+  function truckTons(){ return parseFloat($('truckTons').value) || 40; }
+
+  function calcAll(){
+    const rho = density();
+    const truck = truckTons();
+
+    // 01 Tonnage
+    {
+      const L = parseFloat($('t_L').value), W = parseFloat($('t_W').value), D = parseFloat($('t_D').value);
+      const tons = (L*W*D*rho)/24000;
+      $('t_out').innerHTML = isFinite(tons) ? fmt(tons,2) + '<span class="unit">tons</span>' : '&mdash;';
+    }
+
+    // 02 Truck coverage
+    {
+      const W = parseFloat($('tc_W').value), D = parseFloat($('tc_D').value);
+      const lf = (truck*24000)/(W*D*rho);
+      $('tc_out').innerHTML = isFinite(lf) ? fmt(lf,0) + '<span class="unit">LF</span>' : '&mdash;';
+      const startVal = parseStation($('tc_start').value);
+      if(startVal !== null && isFinite(lf)){
+        $('tc_station').textContent = toStation(startVal) + '  \u2192  ' + toStation(startVal+lf);
+      } else {
+        $('tc_station').textContent = '';
+      }
+    }
+
+    // 03 Station -> tons
+    {
+      const s = parseStation($('st_start').value);
+      const e = parseStation($('st_end').value);
+      const W = parseFloat($('st_W').value), D = parseFloat($('st_D').value);
+      if(s !== null && e !== null){
+        const lf = Math.abs(e - s);
+        const tons = (lf*W*D*rho)/24000;
+        $('st_out').innerHTML = isFinite(tons) ? fmt(tons,2) + '<span class="unit">tons</span>' : '&mdash;';
+        $('st_lf').textContent = fmt(lf,0) + ' LF';
+      } else {
+        $('st_out').innerHTML = '&mdash;';
+        $('st_lf').textContent = '';
+      }
+    }
+
+    // 04 Tons -> station
+    {
+      const tons = parseFloat($('ts_tons').value);
+      const W = parseFloat($('ts_W').value), D = parseFloat($('ts_D').value);
+      const lf = (tons*24000)/(W*D*rho);
+      $('ts_out').innerHTML = isFinite(lf) ? fmt(lf,0) + '<span class="unit">LF</span>' : '&mdash;';
+      const startVal = parseStation($('ts_start').value);
+      if(startVal !== null && isFinite(lf)){
+        $('ts_station').textContent = toStation(startVal) + '  \u2192  ' + toStation(startVal+lf);
+      } else {
+        $('ts_station').textContent = '';
+      }
+    }
+
+    // 05 Find width
+    {
+      const tons = parseFloat($('w_tons').value), L = parseFloat($('w_L').value), D = parseFloat($('w_D').value);
+      const W = (tons*24000)/(L*D*rho);
+      $('w_out').innerHTML = isFinite(W) ? fmt(W,2) + '<span class="unit">ft</span>' : '&mdash;';
+    }
+
+    // 06 Find depth
+    {
+      const tons = parseFloat($('d_tons').value), L = parseFloat($('d_L').value), W = parseFloat($('d_W').value);
+      const D = (tons*24000)/(L*W*rho);
+      $('d_out').innerHTML = isFinite(D) ? fmt(D,2) + '<span class="unit">in</span>' : '&mdash;';
+    }
+
+    // 07 Station convert
+    {
+      const stVal = $('cv_station').value;
+      const lfVal = $('cv_lf').value;
+      if(document.activeElement.id === 'cv_lf' && lfVal !== ''){
+        const lf = parseFloat(lfVal);
+        $('cv_out').innerHTML = isFinite(lf) ? toStation(lf) : '&mdash;';
+      } else if(stVal !== ''){
+        const s = parseStation(stVal);
+        $('cv_out').innerHTML = s !== null ? fmt(s,0) + '<span class="unit">LF</span>' : '&mdash;';
+      } else if(lfVal !== ''){
+        const lf = parseFloat(lfVal);
+        $('cv_out').innerHTML = isFinite(lf) ? toStation(lf) : '&mdash;';
+      } else {
+        $('cv_out').innerHTML = '&mdash;';
+      }
+    }
+
+    drawXsec();
+  }
+
+  function drawXsec(){
+    // Pull the width/depth from whichever tab is active, fall back to tonnage tab
+    const active = document.querySelector('.stop.active').dataset.tab;
+    let W, D;
+    const map = {
+      tonnage: ['t_W','t_D'], truck: ['tc_W','tc_D'], stationtons: ['st_W','st_D'],
+      tonsstation: ['ts_W','ts_D'], width: [null,'w_D'], depth: ['d_W', null]
+    };
+    if(map[active]){
+      W = map[active][0] ? parseFloat($(map[active][0]).value) : 12;
+      D = map[active][1] ? parseFloat($(map[active][1]).value) : 2;
+    } else {
+      W = 12; D = 2;
+    }
+    if(!isFinite(W) || W<=0) W = 12;
+    if(!isFinite(D) || D<=0) D = 2;
+
+    const svgW = 640, svgH = 140;
+    const padX = 60, padY = 30;
+    const roadW = svgW - padX*2;
+    const maxDepthPx = 46;
+    const depthPx = Math.min(maxDepthPx, 14 + D*10);
+
+    const svg = $('xsecSvg');
+    svg.innerHTML = `
+      <rect x="0" y="0" width="${svgW}" height="${svgH}" fill="none"/>
+      <!-- subgrade -->
+      <rect x="${padX-20}" y="${padY+depthPx}" width="${roadW+40}" height="30" fill="#2a2a2c" />
+      <!-- asphalt mat -->
+      <rect x="${padX}" y="${padY}" width="${roadW}" height="${depthPx}" fill="#5c5854" stroke="#ffc72c" stroke-width="1.5"/>
+      <!-- centerline dashes -->
+      ${Array.from({length:9}).map((_,i)=>`<rect x="${padX + roadW/2 - 10 + 0} y="${padY+depthPx/2-2}" width="14" height="3" fill="#f0ede4" opacity="0.5" transform="translate(${(i-4)*60},0)"/>`).join('')}
+      <!-- width dimension line -->
+      <line x1="${padX}" y1="${padY - 12}" x2="${padX+roadW}" y2="${padY-12}" stroke="#ff6a1a" stroke-width="1.5"/>
+      <line x1="${padX}" y1="${padY - 18}" x2="${padX}" y2="${padY - 6}" stroke="#ff6a1a" stroke-width="1.5"/>
+      <line x1="${padX+roadW}" y1="${padY - 18}" x2="${padX+roadW}" y2="${padY - 6}" stroke="#ff6a1a" stroke-width="1.5"/>
+      <text x="${padX+roadW/2}" y="${padY-20}" fill="#ff6a1a" font-size="12" font-family="IBM Plex Mono" text-anchor="middle">${W.toFixed(1)} ft</text>
+      <!-- depth dimension line -->
+      <line x1="${padX+roadW+14}" y1="${padY}" x2="${padX+roadW+14}" y2="${padY+depthPx}" stroke="#ff6a1a" stroke-width="1.5"/>
+      <line x1="${padX+roadW+8}" y1="${padY}" x2="${padX+roadW+20}" y2="${padY}" stroke="#ff6a1a" stroke-width="1.5"/>
+      <line x1="${padX+roadW+8}" y1="${padY+depthPx}" x2="${padX+roadW+20}" y2="${padY+depthPx}" stroke="#ff6a1a" stroke-width="1.5"/>
+      <text x="${padX+roadW+28}" y="${padY+depthPx/2+4}" fill="#ff6a1a" font-size="12" font-family="IBM Plex Mono">${D.toFixed(2)}"</text>
+    `;
+  }
+
+  // Tabs
+  document.getElementById('tabs').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.stop');
+    if(!btn) return;
+    document.querySelectorAll('.stop').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p=>p.style.display='none');
+    document.getElementById('panel-'+btn.dataset.tab).style.display='block';
+    calcAll();
+  });
+
+  document.addEventListener('input', calcAll);
+  calcAll();
+})();
+
+// Register service worker for offline use
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
