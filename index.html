@@ -161,6 +161,36 @@
   }
   footer a{ color: var(--safety-orange); }
 
+  /* Log / report */
+  .log-toolbar{
+    display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;
+  }
+  .btn{
+    font-family:'Oswald',sans-serif; font-size:12px; text-transform:uppercase;
+    letter-spacing:0.06em; border:1px solid var(--concrete); background: var(--asphalt);
+    color: var(--line-paint); padding:9px 14px; border-radius:3px; cursor:pointer;
+  }
+  .btn.primary{ background: var(--safety-orange); border-color: var(--safety-orange); color: var(--asphalt); font-weight:600; }
+  .btn.danger{ border-color:#8a3a2a; color:#e08a6f; }
+  .btn:active{ transform: translateY(1px); }
+
+  .log-table-wrap{ overflow-x:auto; border:1px solid var(--concrete); border-radius:4px; }
+  table.log{ width:100%; border-collapse: collapse; font-size:12px; min-width:640px; }
+  table.log th{
+    text-align:left; font-family:'Oswald',sans-serif; font-size:10px; text-transform:uppercase;
+    letter-spacing:0.06em; color: var(--muted); background: var(--asphalt); padding:8px 10px;
+    border-bottom:1px solid var(--concrete); position:sticky; top:0;
+  }
+  table.log td{ padding:8px 10px; border-bottom:1px solid var(--concrete); white-space:nowrap; }
+  table.log tr:last-child td{ border-bottom:none; }
+  table.log td.station{ color: var(--caution-yellow); }
+  table.log td.tons{ color: var(--ok-green); font-weight:600; }
+  .log-empty{ padding:22px; text-align:center; color: var(--muted); font-size:12px; }
+  .del-btn{
+    background:none; border:none; color:#e08a6f; cursor:pointer; font-size:14px; padding:2px 6px;
+  }
+  .log-count{ font-size:11px; color: var(--muted); margin-bottom:10px; }
+
   @media (max-width:480px){
     .config, .grid2{ grid-template-columns:1fr; }
     h1{ font-size:22px; }
@@ -200,6 +230,7 @@
     <button class="stop" data-tab="width"><span class="num">05</span>Find Width</button>
     <button class="stop" data-tab="depth"><span class="num">06</span>Find Depth</button>
     <button class="stop" data-tab="convert"><span class="num">07</span>Station Convert</button>
+    <button class="stop" data-tab="log"><span class="num">08</span>Log &amp; Report</button>
   </div>
 
   <!-- 01 TONNAGE -->
@@ -322,6 +353,47 @@
         <div class="label">Converted value</div>
         <div class="value" id="cv_out">&mdash;</div>
       </div>
+    </div>
+  </div>
+
+  <!-- 08 LOG & REPORT -->
+  <div class="panel tab-panel" id="panel-log" style="display:none;">
+    <h2>Log Truck Load &rarr; Report</h2>
+    <div class="desc">Enter a load, get the ending station, and save it as a report entry.</div>
+    <div class="grid2">
+      <div class="field"><label>Truck Load (tons)</label><input type="number" id="lg_tons" value="40"></div>
+      <div class="field"><label>Width (ft)</label><input type="number" id="lg_W" value="12"></div>
+      <div class="field"><label>Depth (in)</label><input type="number" id="lg_D" value="2" step="0.25"></div>
+      <div class="field"><label>Starting Station</label><input type="text" id="lg_start" placeholder="300+00"></div>
+      <div class="field"><label>Date</label><input type="date" id="lg_date"></div>
+      <div class="field"><label>Crew / Truck # (optional)</label><input type="text" id="lg_notes" placeholder="Truck 12 / Crew A"></div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="label">Calculated coverage</div>
+        <div class="value" id="lg_out">&mdash;</div>
+        <div class="station" id="lg_station"></div>
+      </div>
+    </div>
+    <div class="log-toolbar" style="margin-top:14px;">
+      <button class="btn primary" id="lg_add">+ Add to Report</button>
+    </div>
+
+    <div class="log-count" id="lg_count">0 entries logged</div>
+    <div class="log-toolbar">
+      <button class="btn" id="lg_export">Export CSV</button>
+      <button class="btn danger" id="lg_clear">Clear Report</button>
+    </div>
+    <div class="log-table-wrap">
+      <table class="log" id="lg_table">
+        <thead>
+          <tr>
+            <th>Date</th><th>Start</th><th>End</th><th>LF</th><th>Tons</th><th>W</th><th>D</th><th>Notes</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="lg_tbody"></tbody>
+      </table>
+      <div class="log-empty" id="lg_empty">No entries yet — add a load above.</div>
     </div>
   </div>
 
@@ -453,7 +525,124 @@
       }
     }
 
+    // 08 Log calc (preview only — doesn't save until "Add to Report")
+    {
+      const tons = parseFloat($('lg_tons').value), W = parseFloat($('lg_W').value), D = parseFloat($('lg_D').value);
+      const lf = (tons*24000)/(W*D*rho);
+      $('lg_out').innerHTML = isFinite(lf) ? fmt(lf,0) + '<span class="unit">LF</span>' : '&mdash;';
+      const startVal = parseStation($('lg_start').value);
+      if(startVal !== null && isFinite(lf)){
+        $('lg_station').textContent = toStation(startVal) + '  \u2192  ' + toStation(startVal+lf);
+      } else {
+        $('lg_station').textContent = '';
+      }
+    }
+
     drawXsec();
+  }
+
+  // ---------- Report log (persisted with localStorage) ----------
+  const LOG_KEY = 'asphaltcalc_log_v1';
+
+  function loadLog(){
+    try{
+      const raw = localStorage.getItem(LOG_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveLog(entries){
+    try{ localStorage.setItem(LOG_KEY, JSON.stringify(entries)); }catch(e){}
+  }
+
+  function renderLog(){
+    const entries = loadLog();
+    const tbody = $('lg_tbody');
+    const empty = $('lg_empty');
+    const table = $('lg_table');
+    $('lg_count').textContent = entries.length + (entries.length === 1 ? ' entry logged' : ' entries logged');
+
+    if(entries.length === 0){
+      table.style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    table.style.display = 'table';
+    empty.style.display = 'none';
+
+    tbody.innerHTML = entries.map((e, i) => `
+      <tr>
+        <td>${e.date || ''}</td>
+        <td class="station">${e.startStation}</td>
+        <td class="station">${e.endStation}</td>
+        <td>${e.lf}</td>
+        <td class="tons">${e.tons}</td>
+        <td>${e.width}</td>
+        <td>${e.depth}</td>
+        <td>${(e.notes || '').replace(/</g,'&lt;')}</td>
+        <td><button class="del-btn" data-idx="${i}" title="Delete entry">&#10005;</button></td>
+      </tr>
+    `).join('');
+  }
+
+  function addLogEntry(){
+    const rho = density();
+    const tons = parseFloat($('lg_tons').value);
+    const W = parseFloat($('lg_W').value);
+    const D = parseFloat($('lg_D').value);
+    const startVal = parseStation($('lg_start').value);
+    const date = $('lg_date').value || new Date().toISOString().slice(0,10);
+    const notes = $('lg_notes').value;
+
+    if(!isFinite(tons) || !isFinite(W) || !isFinite(D) || startVal === null){
+      alert('Please fill in tons, width, depth, and a valid starting station (e.g. 300+00) before adding to the report.');
+      return;
+    }
+    const lf = (tons*24000)/(W*D*rho);
+    const endVal = startVal + lf;
+
+    const entries = loadLog();
+    entries.push({
+      date,
+      startStation: toStation(startVal),
+      endStation: toStation(endVal),
+      lf: lf.toFixed(0),
+      tons: tons.toFixed(2),
+      width: W,
+      depth: D,
+      notes,
+      density: rho
+    });
+    saveLog(entries);
+    renderLog();
+
+    // advance starting station to the end of this load, ready for the next truck
+    $('lg_start').value = toStation(endVal);
+    calcAll();
+  }
+
+  function exportCSV(){
+    const entries = loadLog();
+    if(entries.length === 0){ alert('No entries to export yet.'); return; }
+    const headers = ['Date','Start Station','End Station','Linear Feet','Tons','Width (ft)','Depth (in)','Density (lb/ft3)','Notes'];
+    const rows = entries.map(e => [e.date, e.startStation, e.endStation, e.lf, e.tons, e.width, e.depth, e.density, (e.notes||'').replace(/,/g,';')]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `asphalt-report-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function clearLog(){
+    if(confirm('Clear all logged entries? This cannot be undone.')){
+      saveLog([]);
+      renderLog();
+    }
   }
 
   function drawXsec(){
@@ -513,7 +702,25 @@
   });
 
   document.addEventListener('input', calcAll);
+
+  $('lg_add').addEventListener('click', addLogEntry);
+  $('lg_export').addEventListener('click', exportCSV);
+  $('lg_clear').addEventListener('click', clearLog);
+  $('lg_tbody').addEventListener('click', (e) => {
+    const btn = e.target.closest('.del-btn');
+    if(!btn) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+    const entries = loadLog();
+    entries.splice(idx, 1);
+    saveLog(entries);
+    renderLog();
+  });
+
+  // default the date field to today
+  $('lg_date').value = new Date().toISOString().slice(0,10);
+
   calcAll();
+  renderLog();
 })();
 
 // Register service worker for offline use
@@ -525,4 +732,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-
